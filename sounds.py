@@ -10,7 +10,7 @@ filetype = 'mp3'
 regex = re.compile("^" + keyword + "\s([a-z]+)$")
 
 f = open('token.txt')
-token = f.read
+token = f.readline()
 
 sc = SlackClient(token)
 
