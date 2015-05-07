@@ -1,1 +1,3 @@
 *.pyc
+sounds/*
+token.txt
