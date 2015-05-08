@@ -2,6 +2,8 @@ slack-sounds
 ================
 A client for Slack.com, that plays sound files on request e.g. `play trololo`.
 
+This is designed to run on a box in your office hooked up to speakers. That way everyone in your slack channel can enjoy its magic.
+
 Overview
 ---------
 This plugin implements the python-slackclient to listen to channels its in (or direct messages) and responds to requests to play sounds of the format:
