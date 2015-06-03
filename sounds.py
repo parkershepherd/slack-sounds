@@ -52,7 +52,7 @@ if sc.rtm_connect():
                     os.system(command)
                 elif speak_match:
                     print whitelist[event['user']] + ' speaks ' + speak_match.group(1)
-                    command = text2voice + ' "' + speak_match.group(1) + '"'
+                    command = text2voice + ' -110 "' + speak_match.group(1) + '"'
                     if debug: print 'Running command: ' + command
                     os.system(command)
                 elif play_yt_match:
