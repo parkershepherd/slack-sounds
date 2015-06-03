@@ -1,3 +1,4 @@
 *.pyc
 sounds/*
 token.txt
+whitelist.txt
