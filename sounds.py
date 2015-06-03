@@ -14,6 +14,10 @@ play_yt_regex = re.compile("^play-yt\s<?(https?:\/\/[a-z./]*\?v=[a-zA-Z0-9_-]*)>
 # lol that above regex matches the pattern:
 #     play-yt <yt video url> <start> <duration>
 # start and duration are optional
+add_sound_regex = re.compile("^add-sound\s([a-z]+)\s<?(https?:\/\/[a-z./]*\?v=[a-zA-Z0-9_-]*)>?(\s([0-9.]*)\s([0-9.]*)$)?")
+# lol that above regex matches the pattern:
+#     add-sound <token> <yt video url> <start> <duration>
+# start and duration are optional
 
 whitelist = {}
 with open('whitelist.txt') as f:
@@ -39,6 +43,7 @@ if sc.rtm_connect():
                 play_match = play_regex.match(event['text'])
                 speak_match = speak_regex.match(event['text'])
                 play_yt_match = play_yt_regex.match(event['text'])
+                add_sound_match = add_sound_regex.match(event['text'])
 
                 if play_match:
                     print whitelist[event['user']] + ' plays ' + play_match.group(1)
@@ -54,6 +59,12 @@ if sc.rtm_connect():
                     print whitelist[event['user']] + ' plays youtube video ' + play_yt_match.group(1)
                     command = './yt-audio.sh ' + play_yt_match.group(1)
                     if play_yt_match.group(2): command += play_yt_match.group(2)
+                    if debug: print 'Running command: ' + command
+                    os.system(command)
+                elif add_sound_match:
+                    print whitelist[event['user']] + ' adds sound ' + add_sound_match.group(1) + ' from youtube video ' + add_sound_match.group(2)
+                    command = './yt-add-sound.sh ' + add_sound_match.group(1) + ' ' + add_sound_match.group(2)
+                    if add_sound_match.group(3): command += add_sound_match.group(3)
                     if debug: print 'Running command: ' + command
                     os.system(command)
         time.sleep(1);
