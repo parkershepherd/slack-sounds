@@ -38,7 +38,7 @@ sc = SlackClient(token)
 if sc.rtm_connect():
     while True:
         for event in sc.rtm_read():
-            if event['type'] == 'message' and 'text' in event and 'user' in event and event['user'] in whitelist.keys():
+            if 'type' in event and event['type'] == 'message' and 'text' in event and 'user' in event and event['user'] in whitelist.keys():
                 if debug: print "Parsing message from " + whitelist[event['user']] + ": '" + event['text'] + "'"
                 play_match = play_regex.match(event['text'])
                 speak_match = speak_regex.match(event['text'])
