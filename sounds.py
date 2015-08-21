@@ -56,7 +56,7 @@ if sc.rtm_connect():
             if 'type' in event and event['type'] == 'message' and 'text' in event:
                 if ('user' in event and event['user'] in whitelist.keys()):
                     user = whitelist[event['user']]
-                elif ('subtype' in event and event['subtype'] == 'bot_message' and event['bot_id'] in whitelist.keys()):
+                elif ('subtype' in event and event['subtype'] == 'bot_message' and 'bot_id' in event and event['bot_id'] in whitelist.keys()):
                     user = whitelist[event['bot_id']]
                 else:
                     user = False
