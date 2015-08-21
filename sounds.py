@@ -1,6 +1,9 @@
+#!/usr/bin/env python
 import time
 from slackclient import SlackClient
 import os, re
+
+base_dir = os.path.dirname(os.path.realpath(__file__))
 
 player = 'mpg123'
 text2voice = 'espeak'
@@ -32,7 +35,7 @@ def action(command, message):
     os.system(command)
 
 whitelist = {}
-with open('whitelist.txt') as f:
+with open(os.path.join(base_dir, 'whitelist.txt')) as f:
     for line in f:
         (name, identifier) = line.split()
         whitelist[identifier] = name
@@ -40,7 +43,7 @@ with open('whitelist.txt') as f:
 print "Whitelist:"
 print whitelist
 
-f = open('token.txt')
+f = open(os.path.join(base_dir, 'token.txt'))
 token = f.readline().rstrip()
 f.close()
 
@@ -50,31 +53,39 @@ sc = SlackClient(token)
 if sc.rtm_connect():
     while True:
         for event in sc.rtm_read():
-            if 'type' in event and event['type'] == 'message' and 'text' in event and 'user' in event and event['user'] in whitelist.keys():
-                if debug: print "Parsing message from " + whitelist[event['user']] + ": '" + event['text'] + "'"
-                play_match = play_regex.match(event['text'])
-                speak_match = speak_regex.match(event['text'])
-                play_yt_match = play_yt_regex.match(event['text'])
-                add_sound_match = add_sound_regex.match(event['text'])
+            if 'type' in event and event['type'] == 'message' and 'text' in event:
+                if ('user' in event and event['user'] in whitelist.keys()):
+                    user = whitelist[event['user']]
+                elif ('subtype' in event and event['subtype'] == 'bot_message' and event['bot_id'] in whitelist.keys()):
+                    user = whitelist[event['bot_id']]
+                else:
+                    user = False
+                if user:
+                    if debug: print "Parsing message from " + user + ": '" + event['text'] + "'"
+                    play_match = play_regex.match(event['text'])
+                    speak_match = speak_regex.match(event['text'])
+                    play_yt_match = play_yt_regex.match(event['text'])
+                    add_sound_match = add_sound_regex.match(event['text'])
 
-                if play_match:
-                    message = whitelist[event['user']] + ' plays ' + play_match.group(1)
-                    command = player + ' ' + sounds_dir + '/' + play_match.group(1) + '.' + filetype
-                    action(command, message)
-                elif speak_match:
-                    message = whitelist[event['user']] + ' speaks ' + speak_match.group(1)
-                    command = text2voice + ' -a 20 -s 110 "' + speak_match.group(1) + '"'
-                    action(command, message)
-                elif play_yt_match:
-                    message = whitelist[event['user']] + ' plays youtube video ' + play_yt_match.group(1)
-                    command = './yt-audio.sh ' + play_yt_match.group(1)
-                    if play_yt_match.group(2): command += play_yt_match.group(2)
-                    action(command, message)
-                elif add_sound_match:
-                    message = whitelist[event['user']] + ' adds sound ' + add_sound_match.group(1) + ' from youtube video ' + add_sound_match.group(2)
-                    command = './yt-add-sound.sh ' + add_sound_match.group(1) + ' ' + add_sound_match.group(2)
-                    if add_sound_match.group(3): command += add_sound_match.group(3)
-                    action(command, message)
+                    if play_match:
+                        message = user + ' plays ' + play_match.group(1)
+                        sound_file = os.path.join(base_dir, sounds_dir, play_match.group(1) + '.' + filetype)
+                        command = player + ' ' + sound_file
+                        action(command, message)
+                    elif speak_match:
+                        message = user + ' speaks ' + speak_match.group(1)
+                        command = text2voice + ' "' + speak_match.group(1) + '"'
+                        action(command, message)
+                    elif play_yt_match:
+                        message = user + ' plays youtube video ' + play_yt_match.group(1)
+                        command = os.path.join(base_dir, 'yt-audio.sh') + ' ' + play_yt_match.group(1)
+                        if play_yt_match.group(2): command += play_yt_match.group(2)
+                        action(command, message)
+                    elif add_sound_match:
+                        message = user + ' adds sound ' + add_sound_match.group(1) + ' from youtube video ' + add_sound_match.group(2)
+                        command = os.path.join(base_dir, 'yt-add-sound.sh') + ' ' + add_sound_match.group(1) + ' ' + add_sound_match.group(2)
+                        if add_sound_match.group(3): command += add_sound_match.group(3)
+                        action(command, message)
         time.sleep(1);
 else:
     print 'Connection failed, invalid token?'
