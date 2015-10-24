@@ -1,0 +1,5 @@
+player afplay
+text2voice say
+sounds_dir sounds
+filetype mp3
+timeout_duration 10
