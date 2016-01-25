@@ -1,7 +1,6 @@
 #!/usr/bin/env python
-import time
+import time, os, re, traceback, urllib, urllib2, platform
 from slackclient import SlackClient
-import os, re, traceback
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
 config = {}
@@ -9,12 +8,9 @@ whitelist = {}
 channels = {}
 last_played = 0
 
-play_regex = re.compile("^play\s([a-z0-9]+)$")
+play_regex = re.compile("^play\s([a-z0-9/]+)$")
+help_regex = re.compile("^play\shelp\s?([a-z0-9/]*)$")
 speak_regex = re.compile("^speak\s([a-zA-Z0-9,'!?\- ]+)$")
-play_yt_regex = re.compile("^play-yt\s<?(https?:\/\/[a-z./]*\?v=[a-zA-Z0-9_-]*)>?(\s([0-9.]*)\s([0-9.]*)$)?")
-# play-yt <yt video url> <start> <duration> (start and duration are optional)
-add_sound_regex = re.compile("^add-sound\s([a-z0-9]+)\s<?(https?:\/\/[a-z./]*\?v=[a-zA-Z0-9_-]*)>?(\s([0-9.]*)\s([0-9.]*)$)?")
-# add-sound <token> <yt video url> <start> <duration> (start and duration are optional)
 
 def action(command):
   print ' -> %s\n' % command.replace(base_dir, '')
@@ -29,13 +25,6 @@ def refresh_whitelist():
       if not identifier in whitelist.keys():
         print "Adding user %s to the whitelist" % name
         whitelist[identifier] = name
-
-f = open(os.path.join(base_dir, 'config/token.txt'))
-token = f.readline().rstrip()
-f.close()
-
-print "Connecting using token " + token
-sc = SlackClient(token)
 
 
 def refresh_channels():
@@ -58,30 +47,61 @@ def refresh_channels():
       channels[channel.id] = channel_name
 
 
+def get_config():
+  default_config  = os.path.join(base_dir, 'config/config-default.txt')
+  platform_config = os.path.join(base_dir, 'config/config-%s.txt' % platform.system().lower())
+  override_config = os.path.join(base_dir, '../slack-sounds-config.txt')
+  config_lines = []
+  if not os.path.isfile(default_config):
+    print 'Failed to load config from ' + default_config
+    exit(1)
+  with open(default_config) as f:
+    for line in f: config_lines.append(line.strip())
+
+  if not os.path.isfile(platform_config):
+    print 'Failed to load config from ' + platform_config
+    exit(1)
+  with open(platform_config) as f:
+    for line in f: config_lines.append(line.strip())
+
+  if os.path.isfile(override_config):
+    for line in open(override_config):
+      config_lines.append(line.strip())
+
+  return config_lines
+
+
 def refresh_config():
   global config
-  with open(os.path.join(base_dir, 'config/config.txt')) as f:
-    for line in f:
-      (key, value) = line.split()
-      if not key in config.keys() or not config[key] == value:
-        print "Setting %s to %s" % (key, value)
-        config[key] = value
+  new_config = {}
+  for line in get_config():
+    (key, value) = line.split()
+    new_config[key] = value
+  for key, value in new_config.items():
+    if not key in config.keys() or not config[key] == value:
+      print "Setting %s to %s" % (key, value)
+      config[key] = value
+refresh_config()
+
+
+print "Connecting using token " + config['slack_token']
+sc = SlackClient(config['slack_token'])
+
 
 
 def is_valid_message():
   is_message = 'type' in event and event['type'] == 'message'
   has_text = 'text' in event
   has_channel = 'channel' in event
-  has_user = 'user' in event or 'bot_id' in event
+  has_user = 'user' in event or 'bot_id' in event or 'username' in event
   has_message = 'text' in event
-  is_soundbot = 'soundbot' in event['text'] if has_text else False
-  is_valid_message = is_message and has_text and has_channel and has_user and has_message and not is_soundbot
+  is_valid_message = is_message and has_text and has_channel and has_user and has_message
   return is_valid_message
 
 
 def parse_event():
   is_user = 'user' in event
-  user = event['user'] if 'user' in event else event['bot_id']
+  user = event['user'] if 'user' in event else event['bot_id'] if 'bot_id' in event else event['username']
   message = event['text'].encode('ascii','ignore').strip()
   user_name = whitelist[user] if user in whitelist.keys() else user
   user_name = user_name.encode('ascii','ignore')
@@ -97,15 +117,21 @@ def parse_event():
 
 def show_help():
   print ' -> displaying help message'
-  available_sounds = [f for f in os.listdir(config['sounds_dir']) if (
-    os.path.isfile(os.path.join(config['sounds_dir'],f)) and 
-    ".mp3" in f)]
+  sound_dir = os.path.join(base_dir, config['sounds_dir'], help_match.group(1))
+  if not os.path.isdir(sound_dir):
+    post_as_slackbot(message['channel_name'], '`%s` does not exist' % sound_dir.replace(base_dir, ''))
+    return
+  files = [f for f in os.listdir(sound_dir)]
+  available_sounds = [f for f in files if (os.path.isfile(os.path.join(sound_dir, f)) and ".mp3" in f)]
+  available_folders = [f for f in files if os.path.isdir(os.path.join(sound_dir, f))]
   available_sounds = [sound.replace('.' + config['filetype'], '') for sound in available_sounds]
+  sounds_text = '*Available sounds*:\n```' + ", ".join(available_sounds) + '\n```\n'
+  folder_text = '*Folders*:\n```' + ", ".join(available_folders) + '\n```' if available_folders else ''
   help_message = '\n'.join([
-    '*soundbot*: `play <filename>` (or if you\'re slackbot, just `<filename>`). Available sounds:',
-    '```', ", ".join(available_sounds), '```',
+    '`play <filename>` (or if you\'re slackbot, just `<filename>`). For help: `play help` or `play help <folder>`',
+    sounds_text + folder_text
   ])
-  sc.rtm_send_message(message['channel_name'], help_message)
+  post_as_slackbot(message['channel_name'], help_message)
 
 
 def print_unknown_user():
@@ -115,6 +141,14 @@ def print_unknown_user():
 def print_debug_message():
   print "Message from %s: '%s' (@%s)" % (message['user_name'], message['text'], message['channel_name'])
 
+
+def post_as_slackbot(channel, message):
+  if config['post_as_slackbot'] == 'true':
+    url = 'https://' + config['org_name'] + '.slack.com/services/hooks/slackbot?token=' + config['slackbot_token'] + '&channel=' + channel
+    req = urllib2.Request(url, message)
+    response = urllib2.urlopen(req)
+  else:
+    print ' -> posting as slackbot disabled'
 
 def play_mp3():
   global last_played
@@ -126,26 +160,15 @@ def play_mp3():
       last_played = time.time()
       action(command)
     else:
-      print ' -> rate limit! (%ds remaining)' % (int(config['timeout_duration']) - since_last_played)
-      sc.rtm_send_message(message['channel_name'], '*soundbot*: rate limit!')
-  else: 
+      limit_message = 'rate limit! (%ds remaining)' % (int(config['timeout_duration']) - since_last_played)
+      print ' -> ' + limit_message
+      post_as_slackbot(message['channel_name'], 'soundbot ' + limit_message)
+  else:
     print ' -> file doesnt exist: %s\n' % sound_file.replace(base_dir, '')
 
 
 def text_to_speech():
   command = '%s "%s"' % (config['text2voice'], speak_match.group(1))
-  action(command)
-
-
-def play_youtube():
-  command = os.path.join(base_dir, 'yt-audio.sh') + ' ' + play_yt_match.group(1)
-  if play_yt_match.group(2): command += play_yt_match.group(2)
-  action(command)
-
-
-def download_youtube():
-  command = os.path.join(base_dir, 'yt-add-sound.sh') + ' ' + add_sound_match.group(1) + ' ' + add_sound_match.group(2)
-  if add_sound_match.group(3): command += add_sound_match.group(3)
   action(command)
 
 
@@ -164,31 +187,32 @@ if sc.rtm_connect():
         message = parse_event()
         is_allowed_user = message['user_id'] in whitelist.keys()
         is_watched_channel = message['channel_id'] in channels.keys()
-        if not is_allowed_user: print_unknown_user()
-        if not is_allowed_user or not is_watched_channel: continue
+        if not is_watched_channel: continue
+        if not is_allowed_user:
+          print_unknown_user()
+          continue
+          
+        if message['user_name'] == 'slackbot' and len(message['text']) > 20:
+          continue
+
         print_debug_message()
 
         if message['user_name'] == 'slackbot':
           message['text'] = "play %s" % message['text'] 
 
-        if message['text'] == 'play help':
-          show_help()
-          continue
 
+        help_match = help_regex.match(message['text'])
         play_match = play_regex.match(message['text'])
         speak_match = speak_regex.match(message['text'])
-        play_yt_match = play_yt_regex.match(message['text'])
-        add_sound_match = add_sound_regex.match(message['text'])
 
-        if play_match: play_mp3()
+        if help_match: show_help()
+        elif play_match: play_mp3()
         elif speak_match: text_to_speech()
-        elif play_yt_match: play_youtube()
-        elif add_sound_match: download_youtube()
 
       except:
         print 'Ignoring an error...'
         traceback.print_exc()
 
-    time.sleep(1);
+    time.sleep(float(config['sync_interval']));
 else:
   print 'Connection failed, invalid token?'
