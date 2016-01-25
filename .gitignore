@@ -3,3 +3,4 @@ sounds/*
 config/*
 *.sublime-project
 *.sublime-workspace
+!.gitignore
