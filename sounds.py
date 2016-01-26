@@ -150,11 +150,28 @@ def post_as_slackbot(channel, message):
   else:
     print ' -> posting as slackbot disabled'
 
+
+def find_mp3(name):
+  sounds_dir = os.path.join(base_dir, config['sounds_dir'])
+  file_name = name + '.' + config['filetype']
+  direct_file = os.path.join(sounds_dir, file_name)
+  if os.path.isfile(direct_file):
+    return direct_file
+
+  folders = [f for f in os.listdir(sounds_dir) if os.path.isdir(os.path.join(config['sounds_dir'], f))]
+  for folder in folders:
+    categorized_file = os.path.join(sounds_dir, folder, file_name)
+    if os.path.isfile(categorized_file):
+      print ' -> found sound in the %s folder' % folder
+      return categorized_file
+
+
 def play_mp3():
   global last_played
-  sound_file = os.path.join(base_dir, config['sounds_dir'], play_match.group(1) + '.' + config['filetype'])
-  command = '%s "%s"' % (config['player'], sound_file)
-  if os.path.isfile(sound_file):
+  sound_name = play_match.group(1)
+  sound_file = find_mp3(sound_name)
+  if sound_file:
+    command = '%s "%s"' % (config['player'], sound_file)
     since_last_played = time.time() - last_played
     if (since_last_played) > int(config['timeout_duration']):
       last_played = time.time()
@@ -164,7 +181,7 @@ def play_mp3():
       print ' -> ' + limit_message
       post_as_slackbot(message['channel_name'], 'soundbot ' + limit_message)
   else:
-    print ' -> file doesnt exist: %s\n' % sound_file.replace(base_dir, '')
+    print ' -> file doesnt exist: %s.%s\n' % (sound_name, config['filetype'])
 
 
 def text_to_speech():
