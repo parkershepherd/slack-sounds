@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import time, os, re, traceback, urllib, urllib2, platform
+from glob import glob
 from slackclient import SlackClient
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
@@ -10,6 +11,8 @@ last_played = 0
 
 play_regex = re.compile("^play\s([a-z0-9/]+)$")
 help_regex = re.compile("^play\shelp\s?([a-z0-9/]*)$")
+list_regex = re.compile("^play\slist\s?([a-z0-9/]*)$")
+search_regex = re.compile("^play\ssearch\s?([a-z0-9/]*)$")
 speak_regex = re.compile("^speak\s([a-zA-Z0-9,'!?\- ]+)$")
 
 def action(command):
@@ -114,24 +117,61 @@ def parse_event():
     'channel_name': channel_name,
   }
 
-
 def show_help():
+  file_term = help_match.group(1) if help_match.group(1) else '<filename>'
+  folder_term = help_match.group(1) if help_match.group(1) else '<folder>'
+
+  play_help = '*Play a sound*: `play %s` (or if you\'re slackbot, just `%s`)' % (file_term, file_term)
+  list_help = '*List sounds*: `play list` or `play list %s`' % folder_term
+  search_help = '*Search sounds*: `play search %s`' % file_term
+  help_message = '\n'.join([play_help, list_help, search_help])
   print ' -> displaying help message'
-  sound_dir = os.path.join(base_dir, config['sounds_dir'], help_match.group(1))
+  post_as_slackbot(message['channel_name'], help_message);
+
+def show_list():
+  print ' -> displaying sound list'
+  sound_dir = os.path.join(base_dir, config['sounds_dir'], list_match.group(1))
   if not os.path.isdir(sound_dir):
     post_as_slackbot(message['channel_name'], '`%s` does not exist' % sound_dir.replace(base_dir, ''))
     return
   files = [f for f in os.listdir(sound_dir)]
-  available_sounds = [f for f in files if (os.path.isfile(os.path.join(sound_dir, f)) and ".mp3" in f)]
+  available_sounds = [f for f in files if (os.path.isfile(os.path.join(sound_dir, f)) and '.%s' % config['filetype'] in f)]
   available_folders = [f for f in files if os.path.isdir(os.path.join(sound_dir, f))]
   available_sounds = [sound.replace('.' + config['filetype'], '') for sound in available_sounds]
   sounds_text = '*Available sounds*:\n```' + ", ".join(available_sounds) + '\n```\n'
   folder_text = '*Folders*:\n```' + ", ".join(available_folders) + '\n```' if available_folders else ''
   help_message = '\n'.join([
-    '`play <filename>` (or if you\'re slackbot, just `<filename>`). For help: `play help` or `play help <folder>`',
     sounds_text + folder_text
   ])
   post_as_slackbot(message['channel_name'], help_message)
+
+def show_search():
+  search_term = search_match.group(1)
+
+  if not search_term:
+    print ' -> missing search term!'
+    post_as_slackbot(message['channel_name'], 'you must provide a search term')
+    return
+
+  if len(search_term) < 3:
+    print ' -> search text too short!'
+    post_as_slackbot(message['channel_name'], 'could you be a bit more specific than just `%s`?' % search_term)
+    return
+
+  print ' -> searching for "%s"' % search_term
+  sound_dir = os.path.join(base_dir, config['sounds_dir'])
+  matches = [match for file in os.walk(sound_dir) for match in glob(os.path.join(file[0], '*%s*' % search_term))]
+  matches = [match.replace('%s/' % sound_dir, '').replace('.%s' % config['filetype'], '') for match in matches]
+  results_text = '\n'.join(matches) if matches else ' - no results - '
+  search_message = '\n'.join([
+    '*Search results for*: `%s`' % search_term,
+    '```',
+    results_text,
+    '```'
+
+  ])
+  print ' -> results: %s' % (', '.join(matches) if matches else ' - none -')
+  post_as_slackbot(message['channel_name'], search_message)
 
 
 def print_unknown_user():
@@ -218,11 +258,15 @@ if sc.rtm_connect():
           message['text'] = "play %s" % message['text'] 
 
 
+        list_match = list_regex.match(message['text'])
         help_match = help_regex.match(message['text'])
+        search_match = search_regex.match(message['text'])
         play_match = play_regex.match(message['text'])
         speak_match = speak_regex.match(message['text'])
 
         if help_match: show_help()
+        elif list_match: show_list()
+        elif search_match: show_search()
         elif play_match: play_mp3()
         elif speak_match: text_to_speech()
 
