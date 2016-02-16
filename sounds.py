@@ -161,7 +161,7 @@ def show_search():
   print ' -> searching for "%s"' % search_term
   sound_dir = os.path.join(base_dir, config['sounds_dir'])
   matches = [match for file in os.walk(sound_dir) for match in glob(os.path.join(file[0], '*%s*' % search_term))]
-  matches = [match.replace('%s/' % sound_dir, '').replace('.%s' % config['filetype'], '') for match in matches]
+  matches = [match.replace('\\', '/').replace('%s/' % sound_dir, '').replace('.%s' % config['filetype'], '') for match in matches]
   results_text = '\n'.join(matches) if matches else ' - no results - '
   search_message = '\n'.join([
     '*Search results for*: `%s`' % search_term,
