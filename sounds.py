@@ -218,9 +218,9 @@ def play_mp3():
       last_played = time.time()
     else:
       remaining = int(config['timeout_duration']) - since_last_played
-      limit_message = 'calm down, it\'s only been $d seconds! (%ds left)' % (since_last_played, remaining)
+      limit_message = 'calm down, it\'s only been %d seconds! (%d left)' % (since_last_played, remaining)
       print ' -> ' + limit_message
-      post_as_slackbot(message['channel_name'], 'soundbot ' + limit_message)
+      post_as_slackbot(message['channel_name'], limit_message)
   else:
     print ' -> file doesnt exist: %s.%s\n' % (sound_name, config['filetype'])
 
