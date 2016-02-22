@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import time, os, re, traceback, urllib, urllib2, platform
+import time, os, re, traceback, urllib, urllib2, platform, random
 from glob import glob
 from slackclient import SlackClient
 
@@ -127,6 +127,7 @@ def show_help():
   help_message = '\n'.join([play_help, list_help, search_help])
   print ' -> displaying help message'
   post_as_slackbot(message['channel_name'], help_message);
+  print ''
 
 def show_list():
   print ' -> displaying sound list'
@@ -144,24 +145,38 @@ def show_list():
     sounds_text + folder_text
   ])
   post_as_slackbot(message['channel_name'], help_message)
+  print ''
 
-def show_search():
-  search_term = search_match.group(1)
+
+def search_sounds(search_term):
+  if not search_term or len(search_term) < 3:
+    return []
+
+  sound_dir = os.path.join(base_dir, config['sounds_dir'])
+  matches = [match for file in os.walk(sound_dir) for match in glob(os.path.join(file[0], '*%s*' % search_term))]
+  matches = [match.replace('\\', '/').replace('%s/' % sound_dir.replace('\\', '/'), '').replace('.%s' % config['filetype'], '') for match in matches]
+  return matches
+
+
+def show_search(search_term=None):
+  search_term = search_term if search_term != None else search_match.group(1)
+  print ' -> search term is %s' % search_term
 
   if not search_term:
     print ' -> missing search term!'
     post_as_slackbot(message['channel_name'], 'you must provide a search term')
+    print ''
     return
 
   if len(search_term) < 3:
     print ' -> search text too short!'
     post_as_slackbot(message['channel_name'], 'could you be a bit more specific than just `%s`?' % search_term)
+    print ''
     return
 
   print ' -> searching for "%s"' % search_term
   sound_dir = os.path.join(base_dir, config['sounds_dir'])
-  matches = [match for file in os.walk(sound_dir) for match in glob(os.path.join(file[0], '*%s*' % search_term))]
-  matches = [match.replace('\\', '/').replace('%s/' % sound_dir.replace('\\', '/'), '').replace('.%s' % config['filetype'], '') for match in matches]
+  matches = search_sounds(search_term)
   results_text = '\n'.join(matches) if matches else ' - no results - '
   search_message = '\n'.join([
     '*Search results for*: `%s`' % search_term,
@@ -172,10 +187,12 @@ def show_search():
   ])
   print ' -> results: %s' % (', '.join(matches) if matches else ' - none -')
   post_as_slackbot(message['channel_name'], search_message)
+  print ''
 
 
 def print_unknown_user():
-  print "Unknown user %s says '%s' (@%s)" % (message['user_name'], message['text'], message['channel_name'])
+  if message['user_name'] != config['slackbot_name']:
+    print "Unknown user %s says '%s' (@%s)" % (message['user_name'], message['text'], message['channel_name'])
 
 
 def print_debug_message():
@@ -184,8 +201,16 @@ def print_debug_message():
 
 def post_as_slackbot(channel, message):
   if config['post_as_slackbot'] == 'true':
-    url = 'https://' + config['org_name'] + '.slack.com/services/hooks/slackbot?token=' + config['slackbot_token'] + '&channel=' + channel
-    req = urllib2.Request(url, message)
+    post_settings = {
+      'token': config['slack_token'],
+      'channel': channel,
+      'username': config['slackbot_name'],
+      'as_user': 'false',
+      'icon_emoji': ':%s:' % config['slackbot_emoji'],
+      'text': message
+    }
+    url = 'https://slack.com/api/chat.postMessage?' + urllib.urlencode(post_settings)
+    req = urllib2.Request(url)
     response = urllib2.urlopen(req)
   else:
     print ' -> posting as slackbot disabled'
@@ -222,7 +247,27 @@ def play_mp3():
       print ' -> ' + limit_message
       post_as_slackbot(message['channel_name'], limit_message)
   else:
-    print ' -> file doesnt exist: %s.%s\n' % (sound_name, config['filetype'])
+    print ' -> file doesnt exist: %s.%s' % (sound_name, config['filetype'])
+    if message['channel_name'] == config['main_channel']:
+      similar = search_sounds(sound_name)
+      print ' -> found %d similar sounds' % len(similar)
+      if len(similar) > 0:
+        search_message = '\n'.join([
+          '*Did you mean*:'
+          '```',
+          '\n'.join(similar),
+          '```'
+        ])
+        post_as_slackbot(message['channel_name'], search_message)
+      else:
+        messages = [
+          'thanks for sending me on a wild goose chase!',
+          'yeah, that doesn\'t exist',
+          'that\'s nowhere to be found',
+          'did you really expect that to exist?'
+        ]
+        post_as_slackbot(message['channel_name'], random.choice(messages))
+    print ''
 
 
 def text_to_speech():
