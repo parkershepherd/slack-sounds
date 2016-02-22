@@ -160,7 +160,6 @@ def search_sounds(search_term):
 
 def show_search(search_term=None):
   search_term = search_term if search_term != None else search_match.group(1)
-  print ' -> search term is %s' % search_term
 
   if not search_term:
     print ' -> missing search term!'
