@@ -126,8 +126,7 @@ def show_help():
   search_help = '*Search sounds*: `play search %s`' % file_term
   help_message = '\n'.join([play_help, list_help, search_help])
   print ' -> displaying help message'
-  post_as_slackbot(message['channel_name'], help_message);
-  print ''
+  post_as_slackbot(message['channel_name'], help_message)
 
 def show_list():
   print ' -> displaying sound list'
@@ -145,7 +144,6 @@ def show_list():
     sounds_text + folder_text
   ])
   post_as_slackbot(message['channel_name'], help_message)
-  print ''
 
 
 def search_sounds(search_term):
@@ -164,29 +162,37 @@ def show_search(search_term=None):
   if not search_term:
     print ' -> missing search term!'
     post_as_slackbot(message['channel_name'], 'you must provide a search term')
-    print ''
     return
 
   if len(search_term) < 3:
     print ' -> search text too short!'
     post_as_slackbot(message['channel_name'], 'could you be a bit more specific than just `%s`?' % search_term)
-    print ''
     return
 
-  print ' -> searching for "%s"' % search_term
   sound_dir = os.path.join(base_dir, config['sounds_dir'])
   matches = search_sounds(search_term)
-  results_text = '\n'.join(matches) if matches else ' - no results - '
-  search_message = '\n'.join([
-    '*Search results for*: `%s`' % search_term,
-    '```',
-    results_text,
-    '```'
-
-  ])
+  print ' -> found %d sounds similar to "%s"' % (len(matches), search_term)
   print ' -> results: %s' % (', '.join(matches) if matches else ' - none -')
-  post_as_slackbot(message['channel_name'], search_message)
-  print ''
+  if matches:
+    results_text = '\n'.join(matches)
+    search_message = '\n'.join([
+      '*Search results for*: `%s`' % search_term,
+      '```',
+      results_text,
+      '```'
+    ])
+    post_as_slackbot(message['channel_name'], search_message)
+  elif message['channel_name'] == config['main_channel']:
+    messages = [
+      'thanks for sending me on a wild goose chase for "{search_term}"!',
+      'yeah, "{search_term}" doesn\'t exist',
+      '"{search_term}" is nowhere to be found',
+      'did you really expect "{search_term}" to exist?',
+      'is "{search_term}" missing, or are you just bad at spelling?',
+    ]
+    post_as_slackbot(message['channel_name'], random.choice(messages).format(search_term=search_term))
+  else:
+    post_as_slackbot(message['channel_name'], "couldn\'t find {search_term}".format(search_term=search_term))
 
 
 def print_unknown_user():
@@ -242,14 +248,23 @@ def play_mp3():
       last_played = time.time()
     else:
       remaining = int(config['timeout_duration']) - since_last_played
-      limit_message = 'calm down, it\'s only been %d seconds! (%d left)' % (since_last_played, remaining)
+      messages = [
+        'wooooah, at least wait a _few_ seconds between sounds ({remaining} left)',
+        'just take a breath... and wait for {remaining} seconds',
+        'it\'s my lunch break. Come back in {remaining} seconds'
+      ] if int(since_last_played) < 5 else [
+        'hey! it\'s only been {since_last_played} seconds. Come back in {remaining}',
+        'calm down, it\'s only been {since_last_played} seconds! ({remaining} left)',
+        'we just did this {since_last_played} seconds ago, can\'t we take a little break? ({remaining} left)'
+      ]
+      limit_message =  random.choice(messages).format(since_last_played=int(since_last_played), remaining=int(remaining))
       print ' -> ' + limit_message
-      post_as_slackbot(message['channel_name'], limit_message)
+      if message['channel_name'] == config['main_channel']:
+        post_as_slackbot(message['channel_name'], limit_message)
   else:
     print ' -> file doesnt exist: %s.%s' % (sound_name, config['filetype'])
     if message['channel_name'] == config['main_channel']:
       similar = search_sounds(sound_name)
-      print ' -> found %d similar sounds' % len(similar)
       if len(similar) > 0:
         search_message = '\n'.join([
           '*Did you mean*:'
@@ -259,14 +274,7 @@ def play_mp3():
         ])
         post_as_slackbot(message['channel_name'], search_message)
       else:
-        messages = [
-          'thanks for sending me on a wild goose chase!',
-          'yeah, that doesn\'t exist',
-          'that\'s nowhere to be found',
-          'did you really expect that to exist?'
-        ]
-        post_as_slackbot(message['channel_name'], random.choice(messages))
-    print ''
+        show_search(sound_name)
 
 
 def text_to_speech():
@@ -309,11 +317,11 @@ if sc.rtm_connect():
         play_match = play_regex.match(message['text'])
         speak_match = speak_regex.match(message['text'])
 
-        if help_match: show_help()
-        elif list_match: show_list()
-        elif search_match: show_search()
-        elif play_match: play_mp3()
-        elif speak_match: text_to_speech()
+        if help_match: show_help(); print ''
+        elif list_match: show_list(); print ''
+        elif search_match: show_search(); print ''
+        elif play_match: play_mp3(); print ''
+        elif speak_match: text_to_speech(); print ''
 
       except:
         print 'Ignoring an error...'
