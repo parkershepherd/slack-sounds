@@ -1,8 +1,10 @@
 #!/usr/bin/env python
-import time, os, re, traceback, urllib, urllib2, platform, random
+import time, os, sys, re, traceback, urllib, urllib2, platform, random
 from glob import glob
 from slackclient import SlackClient
+from os.path import getmtime
 
+original_mtime = getmtime(__file__)
 base_dir = os.path.dirname(os.path.realpath(__file__))
 config = {}
 whitelist = {}
@@ -16,8 +18,17 @@ search_regex = re.compile("^play\ssearch\s?([a-z0-9/]*)$")
 speak_regex = re.compile("^speak\s([a-zA-Z0-9,'!?\- ]+)$")
 
 def action(command):
-  print ' -> %s\n' % command.replace(base_dir, '')
+  print ' -> %s' % command.replace(base_dir, '')
   os.system(command)
+
+
+def check_if_code_changed():
+  if getmtime(__file__) != original_mtime:
+    file = os.path.join(base_dir, __file__)
+    print ''
+    print __file__ + ' changed, restarting!'
+    print ''
+    os.execv(file, sys.argv)
 
 
 def refresh_whitelist():
@@ -258,9 +269,11 @@ def play_mp3():
         'we just did this {since_last_played} seconds ago, can\'t we take a little break? ({remaining} left)'
       ]
       limit_message =  random.choice(messages).format(since_last_played=int(since_last_played), remaining=int(remaining))
-      print ' -> ' + limit_message
       if message['channel_name'] == config['main_channel']:
+        print ' -> printing limit message'
         post_as_slackbot(message['channel_name'], limit_message)
+      else:
+        print ' -> not in main channel, being quiet'
   else:
     print ' -> file doesnt exist: %s.%s' % (sound_name, config['filetype'])
     if message['channel_name'] == config['main_channel']:
@@ -275,6 +288,8 @@ def play_mp3():
         post_as_slackbot(message['channel_name'], search_message)
       else:
         show_search(sound_name)
+    else:
+      print ' -> not in main channel, being quiet'
 
 
 def text_to_speech():
@@ -287,11 +302,12 @@ def text_to_speech():
 if sc.rtm_connect():
   print "Connected as: %s\n" % sc.server.username
   while True:
+    check_if_code_changed()
+    refresh_config()
+    refresh_whitelist()
+    refresh_channels()
     for event in sc.rtm_read():
       try:
-        refresh_config()
-        refresh_whitelist()
-        refresh_channels()
         if not is_valid_message(): continue
 
         message = parse_event()
