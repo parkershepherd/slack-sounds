@@ -11,7 +11,7 @@ whitelist = {}
 channels = {}
 last_played = 0
 
-play_regex = re.compile("^play\s([a-z0-9/]+)$")
+play_regex = re.compile("^play\s([a-z0-9/]+)( \(.*\))?$")
 help_regex = re.compile("^play\shelp\s?([a-z0-9/]*)$")
 list_regex = re.compile("^play\slist\s?([a-z0-9/]*)$")
 search_regex = re.compile("^play\ssearch\s?([a-z0-9/]*)$")
@@ -318,7 +318,7 @@ if sc.rtm_connect():
           print_unknown_user()
           continue
           
-        if message['user_name'] == 'slackbot' and len(message['text']) > 20:
+        if message['user_name'] == 'slackbot' and len(message['text']) > 90:
           continue
 
         print_debug_message()
