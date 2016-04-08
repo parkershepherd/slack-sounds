@@ -162,7 +162,7 @@ def search_sounds(search_term):
     return []
 
   sound_dir = os.path.join(base_dir, config['sounds_dir'])
-  matches = [match for file in os.walk(sound_dir) for match in glob(os.path.join(file[0], '*%s*' % search_term))]
+  matches = [match for file in os.walk(sound_dir) for match in glob(os.path.join(file[0], '*%s*' % search_term)) if os.path.isfile(match)]
   matches = [match.replace('\\', '/').replace('%s/' % sound_dir.replace('\\', '/'), '').replace('.%s' % config['filetype'], '') for match in matches]
   return matches
 
